@@ -58,6 +58,20 @@ are retried for POSTs, so a flaky response can't register a webhook twice.
 SHA-256 of the raw body is the receipt id. The receipt is deleted if
 processing fails so Luma's retry is processed.
 
+**Verified against a real Luma event (2026-10-10).** Linking
+`evt-sjZpNrnBWMYQFwm` synced 784 guests / 2,038 tickets in one run. Every
+guest key parsed from `check_in_qr_code` (`g-` + 15 chars); ticket ids are
+`eventticket-` + 15 chars; guest ids `gst-`. A second full sync rewrote no
+rows. The webhook registered and re-registration reported `exists`. Findings
+that shape later phases:
+- Guests often hold many tickets (up to 24 on one registration), so a guest-key
+  scan must let staff check in some or all of a group.
+- Luma ticket types include add-ons (e.g. "After Party Upgrade") that are not
+  entry tickets. Ticket types need an "admits entry" flag so add-ons are not
+  counted as check-ins (Phase 3, with the perks mapping).
+- The event's own timezone comes from Luma (this one is America/Toronto), so
+  nothing should assume Central time.
+
 **Webhook types handled:** `guest.registered`, `guest.updated` and
 `ticket.registered` (all carry the full guest with `event_tickets` and
 `event`). Others, including `guest.refunded`, are acknowledged and ignored.

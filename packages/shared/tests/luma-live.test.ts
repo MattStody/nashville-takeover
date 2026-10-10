@@ -46,7 +46,7 @@ describe('LiveLumaAdapter', () => {
           name: 'Person 7',
           email: 'person7@example.com',
           approvalStatus: 'approved',
-          tickets: [{ id: 'evtticket-7', ticketTypeId: 'evtticktyp-ga', ticketTypeName: 'General Admission' }],
+          tickets: [{ id: 'eventticket-7', ticketTypeId: 'evtticktyp-ga', ticketTypeName: 'General Admission' }],
         },
       ],
       nextCursor: null,
@@ -202,7 +202,7 @@ describe('webhooks', () => {
     for (const type of ['guest.registered', 'guest.updated', 'ticket.registered']) {
       const parsed = parseLumaWebhook({
         type,
-        data: { ...rawGuest(5), event, event_ticket: rawTicket('evtticket-5') },
+        data: { ...rawGuest(5), event, event_ticket: rawTicket('eventticket-5') },
       });
       expect(parsed).toMatchObject({ kind: 'guest', type, lumaEventId: EVENT_ID, guest: { id: 'gst-5', guestKey: 'g-key5' } });
       expect(JSON.stringify(parsed)).not.toMatch(/amount|currency|phone/);

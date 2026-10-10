@@ -27,7 +27,7 @@ function guest(n: string, tickets: TicketIn[], extra: Record<string, unknown> = 
     ...extra,
   };
 }
-const tt = (id: string, name = 'GA') => ({ id: `evtticket-${id}`, ticketTypeId: 'tt-ga', ticketTypeName: name });
+const tt = (id: string, name = 'GA') => ({ id: `eventticket-${id}`, ticketTypeId: 'tt-ga', ticketTypeName: name });
 
 async function upsert(eventId: string, guests: unknown[]) {
   const [r] = await getDb().asService(`select public.luma_upsert_guests($1, $2::jsonb) as r`, [eventId, JSON.stringify(guests)]);
@@ -72,8 +72,8 @@ describe('luma_upsert_guests', () => {
   it('creates guests and tickets, creating unknown ticket types from the ticket name', async () => {
     expect(await upsert(w.events.a, [guest('1', [tt('1a'), tt('1b')])])).toEqual({ guests: 1, tickets: 2 });
     expect(await ticketsOf('gst-1')).toEqual([
-      { luma_ticket_id: 'evtticket-1a', status: 'active', type_name: 'GA', luma_ticket_type_id: 'tt-ga' },
-      { luma_ticket_id: 'evtticket-1b', status: 'active', type_name: 'GA', luma_ticket_type_id: 'tt-ga' },
+      { luma_ticket_id: 'eventticket-1a', status: 'active', type_name: 'GA', luma_ticket_type_id: 'tt-ga' },
+      { luma_ticket_id: 'eventticket-1b', status: 'active', type_name: 'GA', luma_ticket_type_id: 'tt-ga' },
     ]);
   });
 
@@ -85,7 +85,7 @@ describe('luma_upsert_guests', () => {
     await upsert(w.events.a, [guest('2', [tt('2a')])]);
     const [after] = await db.sql(`select updated_at from public.guests where luma_guest_id = 'gst-2'`);
     expect(after?.updated_at).toEqual(before?.updated_at);
-    const [{ n }] = (await db.sql(`select count(*)::int as n from public.tickets where luma_ticket_id = 'evtticket-2a'`)) as [{ n: number }];
+    const [{ n }] = (await db.sql(`select count(*)::int as n from public.tickets where luma_ticket_id = 'eventticket-2a'`)) as [{ n: number }];
     expect(n).toBe(1);
   });
 
@@ -95,8 +95,8 @@ describe('luma_upsert_guests', () => {
     const [g] = await getDb().sql(`select approval_status, email from public.guests where luma_guest_id = 'gst-3'`);
     expect(g).toEqual({ approval_status: 'declined', email: 'new-3@example.com' });
     expect((await ticketsOf('gst-3')).map((t) => [t.luma_ticket_id, t.status])).toEqual([
-      ['evtticket-3a', 'active'],
-      ['evtticket-3b', 'invalidated'],
+      ['eventticket-3a', 'active'],
+      ['eventticket-3b', 'invalidated'],
     ]);
     // Re-adding the ticket reactivates it.
     await upsert(w.events.a, [guest('3', [tt('3a'), tt('3b')])]);
@@ -106,7 +106,7 @@ describe('luma_upsert_guests', () => {
   it('keeps check-in history when a ticket is invalidated, and blocks new check-ins', async () => {
     const db = getDb();
     await upsert(w.events.a, [guest('4', [tt('4a')])]);
-    const [t] = await db.sql(`select id from public.tickets where luma_ticket_id = 'evtticket-4a'`);
+    const [t] = await db.sql(`select id from public.tickets where luma_ticket_id = 'eventticket-4a'`);
     await db.as(w.users.staffA, `select public.record_check_in(gen_random_uuid(), $1)`, [t?.id]);
     await upsert(w.events.a, [guest('4', [])]);
     const [ci] = await db.sql(`select count(*)::int as n from public.check_ins where ticket_id = $1`, [t?.id]);
@@ -121,12 +121,12 @@ describe('luma_upsert_guests', () => {
     const userId = await createUser(db, 'guest-5@example.com');
     await upsert(w.events.a, [guest('5', [tt('5a')])]);
     const rows = await db.as(userId, `select luma_ticket_id from public.tickets`);
-    expect(rows).toEqual([{ luma_ticket_id: 'evtticket-5a' }]);
+    expect(rows).toEqual([{ luma_ticket_id: 'eventticket-5a' }]);
   });
 
   it('keeps the same Luma guest in two events separate', async () => {
     await upsert(w.events.a, [guest('6', [tt('6a')])]);
-    await upsert(w.events.b, [{ ...guest('6', [{ id: 'evtticket-6b', ticketTypeId: 'tt-b', ticketTypeName: 'GA' }]), guestKey: 'g-6b' }]);
+    await upsert(w.events.b, [{ ...guest('6', [{ id: 'eventticket-6b', ticketTypeId: 'tt-b', ticketTypeName: 'GA' }]), guestKey: 'g-6b' }]);
     const rows = await getDb().sql(`select event_id from public.guests where luma_guest_id = 'gst-6' order by event_id`);
     expect(rows.map((r) => r.event_id).sort()).toEqual([w.events.a, w.events.b].sort());
   });
@@ -171,16 +171,16 @@ describe('resolve_check_in_key', () => {
 
   it('resolves a guest key to every ticket on the registration', async () => {
     expect(await resolve('g-7')).toEqual([
-      { luma_ticket_id: 'evtticket-7a', matched_by: 'guest_key' },
-      { luma_ticket_id: 'evtticket-7b', matched_by: 'guest_key' },
+      { luma_ticket_id: 'eventticket-7a', matched_by: 'guest_key' },
+      { luma_ticket_id: 'eventticket-7b', matched_by: 'guest_key' },
     ]);
   });
 
   it('returns nothing for unknown keys, then resolves them once aliased', async () => {
     const db = getDb();
     expect(await resolve('TKEY7B')).toEqual([]);
-    await db.asService(`select public.luma_record_key_alias($1, 'TKEY7B', 'gst-7', 'evtticket-7b')`, [w.events.a]);
-    expect(await resolve('TKEY7B')).toEqual([{ luma_ticket_id: 'evtticket-7b', matched_by: 'ticket_key' }]);
+    await db.asService(`select public.luma_record_key_alias($1, 'TKEY7B', 'gst-7', 'eventticket-7b')`, [w.events.a]);
+    expect(await resolve('TKEY7B')).toEqual([{ luma_ticket_id: 'eventticket-7b', matched_by: 'ticket_key' }]);
 
     // Ambiguous alias (exact ticket unknown) resolves to the whole guest.
     await db.asService(`select public.luma_record_key_alias($1, 'TKEY7X', 'gst-7')`, [w.events.a]);

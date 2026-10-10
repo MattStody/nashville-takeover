@@ -133,7 +133,7 @@ export async function createTicket(
     db,
     `insert into public.tickets (event_id, guest_id, ticket_type_id, luma_ticket_id, status)
      values ($1, $2, $3, $4, $5) returning id`,
-    [eventId, guestId, ticketTypeId, `evtticket-${uniq()}`, status],
+    [eventId, guestId, ticketTypeId, `eventticket-${uniq()}`, status],
   );
 }
 

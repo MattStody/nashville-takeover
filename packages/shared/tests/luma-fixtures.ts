@@ -36,7 +36,7 @@ export function rawGuest(n: number, overrides: Record<string, unknown> = {}) {
     solana_address: null,
     utm_source: 'instagram',
     attribution_params: null,
-    event_tickets: [rawTicket(`evtticket-${n}`)],
+    event_tickets: [rawTicket(`eventticket-${n}`)],
     event_ticket_orders: [{ id: 'ord-1', amount: 4500, amount_discount: 0, amount_tax: 0, is_captured: true, amount_refunded: 0 }],
     ...overrides,
   };

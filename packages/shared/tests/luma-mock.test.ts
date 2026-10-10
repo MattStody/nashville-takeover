@@ -116,7 +116,7 @@ describe('Luma schemas', () => {
       approvalStatus: 'approved',
       amount: 4500,
       currency: 'usd',
-      tickets: [{ id: 'evtticket-1', ticketTypeId: 't', ticketTypeName: 'GA', amount_paid: 4500 }],
+      tickets: [{ id: 'eventticket-1', ticketTypeId: 't', ticketTypeName: 'GA', amount_paid: 4500 }],
     });
     expect(parsed.email).toBe('someone@example.com');
     expect(JSON.stringify(parsed)).not.toMatch(/amount|currency/);

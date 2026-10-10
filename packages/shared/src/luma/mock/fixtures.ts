@@ -131,7 +131,7 @@ export function generateMockDataset(seed = 615): MockDataset {
       const ticketType = weightedPick(rng, ticketTypes, spec.ticketTypes);
       const ticketCount = rng.chance(0.15) ? rng.int(2, 4) : 1;
       const tickets = Array.from({ length: ticketCount }, (): LumaTicket => {
-        const id = `evtticket-${rng.id(14)}`;
+        const id = `eventticket-${rng.id(15)}`;
         ticketKeys[rng.id(10)] = id;
         return { id, ticketTypeId: ticketType.id, ticketTypeName: ticketType.name };
       });
@@ -170,7 +170,7 @@ function addDemoGuest(rng: Rng, events: MockEvent[]): void {
       email: DEMO_GUEST_EMAIL,
       approvalStatus: 'approved',
       tickets: Array.from({ length: count }, (): LumaTicket => {
-        const id = `evtticket-${rng.id(14)}`;
+        const id = `eventticket-${rng.id(15)}`;
         e.ticketKeys[rng.id(10)] = id;
         return { id, ticketTypeId: type.id, ticketTypeName: type.name };
       }),
