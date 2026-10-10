@@ -4,7 +4,7 @@ Event platform for The Nashville Takeover: a mobile app for guests and
 on-site staff, a web dashboard for managers, and a Supabase backend synced with
 Luma ticketing. No financial data is stored or displayed anywhere.
 
-Status: **Phase 1 (foundation)**. See `DECISIONS.md` for architecture.
+Status: **Phase 2 (Luma integration)**. See `DECISIONS.md` for architecture.
 
 ## Layout
 
@@ -14,14 +14,15 @@ apps/mobile         Expo app (Phases 4–5)
 packages/shared     Domain types, zod schemas, Luma adapter (mock + live), seed generator
 supabase/
   migrations/       Schema, RLS, views, RPCs
-  functions/        Edge functions (Phase 2)
+  functions/        Edge functions: luma-sync, luma-webhook, luma-resolve-key
+    _shared/nt/     GENERATED copy of packages/shared/src (pnpm functions:vendor)
   tests/            RLS and RPC tests (Vitest + pg)
   seed.sql          GENERATED demo data (pnpm seed:generate)
 ```
 
 ## Setup
 
-Requires Node 20+, pnpm 10, and Postgres 15+ or the Supabase CLI.
+Requires Node 20+, pnpm 10, Deno 2 (edge functions), and Postgres 15+ or the Supabase CLI.
 
 ```bash
 pnpm install
@@ -57,10 +58,61 @@ when using `supabase start`):
 | staff2@example.com | Staff, East Side |
 | guest@example.com | Guest: 2 VIP tickets at Broadway Night, 1 GA at East Side |
 
+## Luma integration
+
+Edge functions (Deno):
+
+| Function | Who | Body |
+| --- | --- | --- |
+| `luma-sync` | manager+ | `{"action":"sync","event_id":"<uuid>"}`; repeat with the returned `run_id` while `done` is false |
+| `luma-sync` | admin | `{"action":"link","luma_event_id":"evt-..."}` creates a draft event from Luma and syncs it |
+| `luma-sync` | service role | `{"action":"sync_all"}` for the cron job |
+| `luma-webhook` | Luma | registered at `https://<ref>.supabase.co/functions/v1/luma-webhook?token=<LUMA_WEBHOOK_TOKEN>` |
+| `luma-resolve-key` | staff+ | `{"event_id":"<uuid>","key":"<pk>"}` for QR keys not known locally |
+
+Mock mode (`LUMA_MODE=mock`, the default) serves the same fake dataset the
+seed uses, so everything runs without a Luma key.
+
+### Deploying (project `xmwyrppnznisdhmervye`)
+
+```bash
+supabase link --project-ref xmwyrppnznisdhmervye
+supabase db push                      # migrations
+pnpm functions:vendor
+supabase functions deploy luma-sync luma-webhook luma-resolve-key
+supabase secrets set LUMA_WEBHOOK_TOKEN=$(openssl rand -hex 32)
+# Already set in the dashboard: LUMA_API_KEY. Switch to live when ready:
+supabase secrets set LUMA_MODE=live
+```
+
+Register the webhook with Luma (`POST /v2/webhooks/create`) for
+`guest.registered`, `guest.updated` and `ticket.registered`, using the URL in
+the table above.
+
+Hourly backfill (run once in the SQL editor; needs `pg_cron` and `pg_net`, and
+the service role key stored in Vault as `service_role_key`):
+
+```sql
+select cron.schedule('luma-sync-all', '7 * * * *', $$
+  select net.http_post(
+    url := 'https://xmwyrppnznisdhmervye.supabase.co/functions/v1/luma-sync',
+    headers := jsonb_build_object(
+      'content-type', 'application/json',
+      'authorization', 'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'service_role_key')),
+    body := '{"action":"sync_all"}'::jsonb,
+    timeout_milliseconds := 120000)
+$$);
+```
+
+Read-only check of a real event (prints shapes and counts, no personal data):
+`LUMA_API_KEY=... pnpm --filter @nt/shared luma:smoke evt-...`
+
 ## Environment variables
 
 | Name | Where | Purpose |
 | --- | --- | --- |
 | `LUMA_MODE` | Edge function secrets | `mock` (default) or `live` |
 | `LUMA_API_KEY` | Edge function secrets **only** | Luma API key (Luma Plus). Never in app env. |
+| `LUMA_WEBHOOK_TOKEN` | Edge function secrets | Random 32+ chars; part of the webhook URL |
+| `SYNC_TIME_BUDGET_MS` | Edge function secrets (optional) | Per-call sync budget, default 100000 |
 | `DATABASE_URL` | Local / CI | Postgres for the RLS test suite |

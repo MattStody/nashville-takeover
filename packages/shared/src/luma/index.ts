@@ -1,11 +1,15 @@
 import type { LumaAdapter, LumaMode } from './adapter.ts';
-import { LumaNotImplementedError } from './adapter.ts';
+import type { LumaHttpOptions } from './live/http.ts';
+import { LiveLumaAdapter } from './live/live-adapter.ts';
 import { MockLumaAdapter } from './mock/mock-adapter.ts';
 
 export * from './adapter.ts';
 export * from './types.ts';
 export { MockLumaAdapter } from './mock/mock-adapter.ts';
 export { generateMockDataset, type MockDataset, type MockEvent } from './mock/fixtures.ts';
+export { LiveLumaAdapter, guestKeyFromQr, normalizeGuest } from './live/live-adapter.ts';
+export { LumaApiError, LumaContractError, LUMA_BASE_URL, type LumaHttpOptions } from './live/http.ts';
+export { parseLumaWebhook, safeEqual, webhookReceiptId, type ParsedLumaWebhook } from './live/webhook.ts';
 
 export interface LumaEnv {
   LUMA_MODE?: string;
@@ -21,9 +25,12 @@ export function resolveLumaMode(env: LumaEnv): LumaMode {
 }
 
 /** Picks the adapter from env. Defaults to mock so development needs no API key. */
-export function createLumaAdapter(env: LumaEnv): LumaAdapter {
+export function createLumaAdapter(
+  env: LumaEnv,
+  httpOptions: Omit<LumaHttpOptions, 'apiKey'> = {},
+): LumaAdapter {
   const mode = resolveLumaMode(env);
   if (mode === 'mock') return new MockLumaAdapter();
   if (!env.LUMA_API_KEY) throw new Error('LUMA_MODE=live requires LUMA_API_KEY');
-  throw new LumaNotImplementedError('Live Luma adapter (Phase 2)');
+  return new LiveLumaAdapter({ ...httpOptions, apiKey: env.LUMA_API_KEY });
 }

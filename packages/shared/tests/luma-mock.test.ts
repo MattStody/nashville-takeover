@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   createLumaAdapter,
   generateMockDataset,
+  LiveLumaAdapter,
   LumaGuestSchema,
-  LumaNotImplementedError,
   MockLumaAdapter,
 } from '../src/index.ts';
 import { DEMO_GUEST_EMAIL } from '../src/luma/mock/fixtures.ts';
@@ -24,7 +24,7 @@ describe('mock dataset', () => {
       expect(g.id).toMatch(/^gst-/);
     }
     expect(new Set(guests.map((g) => g.guestKey)).size).toBe(guests.length);
-    expect(new Set(tickets.map((t) => t.ticketKey)).size).toBe(tickets.length);
+    expect(new Set(tickets.map((t) => t.id)).size).toBe(tickets.length);
     for (const e of events) {
       const typeIds = new Set(e.ticketTypes.map((t) => t.id));
       for (const g of e.guests) for (const t of g.tickets) expect(typeIds.has(t.ticketTypeId)).toBe(true);
@@ -39,11 +39,17 @@ describe('mock dataset', () => {
     expect(counts.get(DEMO_GUEST_EMAIL)).toBe(2);
   });
 
-  it('includes non-approved guests and cancelled tickets for edge cases', () => {
+  it('includes non-approved guests and multi-ticket registrations', () => {
     const guests = generateMockDataset().events.flatMap((e) => e.guests);
     expect(guests.some((g) => g.approvalStatus !== 'approved')).toBe(true);
-    expect(guests.some((g) => g.tickets.some((t) => t.status === 'cancelled'))).toBe(true);
     expect(guests.some((g) => g.tickets.length > 1)).toBe(true);
+  });
+
+  it('keeps ticket keys off the guest payload, like the real API', () => {
+    const { events } = generateMockDataset();
+    const e = events[0]!;
+    expect(Object.keys(e.ticketKeys).length).toBe(e.guests.flatMap((g) => g.tickets).length);
+    expect(JSON.stringify(e.guests)).not.toContain(Object.keys(e.ticketKeys)[0]);
   });
 });
 
@@ -67,11 +73,12 @@ describe('MockLumaAdapter', () => {
   it('looks up guests by id, guest key, ticket key, and email', async () => {
     const g = first.guests[3]!;
     const id = first.event.id;
-    expect(await adapter.getGuest(id, { guestId: g.id })).toEqual(g);
-    expect(await adapter.getGuest(id, { guestKey: g.guestKey })).toEqual(g);
-    expect(await adapter.getGuest(id, { ticketKey: g.tickets[0]!.ticketKey })).toEqual(g);
-    expect(await adapter.getGuest(id, { email: g.email.toUpperCase() })).toEqual(g);
-    expect(await adapter.getGuest(id, { guestKey: 'g-missing' })).toBeNull();
+    const ticketKey = Object.entries(first.ticketKeys).find(([, tid]) => tid === g.tickets[0]!.id)![0];
+    expect(await adapter.getGuest(id, g.id)).toEqual(g);
+    expect(await adapter.getGuest(id, g.guestKey)).toEqual(g);
+    expect(await adapter.getGuest(id, ticketKey)).toEqual(g);
+    expect(await adapter.getGuest(id, g.email.toUpperCase())).toEqual(g);
+    expect(await adapter.getGuest(id, 'g-missing')).toBeNull();
   });
 
   it('returns empty results for unknown events', async () => {
@@ -94,7 +101,7 @@ describe('createLumaAdapter', () => {
   it('validates the mode and requires a key for live', () => {
     expect(() => createLumaAdapter({ LUMA_MODE: 'prod' })).toThrow(/LUMA_MODE/);
     expect(() => createLumaAdapter({ LUMA_MODE: 'live' })).toThrow(/LUMA_API_KEY/);
-    expect(() => createLumaAdapter({ LUMA_MODE: 'live', LUMA_API_KEY: 'k' })).toThrow(LumaNotImplementedError);
+    expect(createLumaAdapter({ LUMA_MODE: 'live', LUMA_API_KEY: 'k' })).toBeInstanceOf(LiveLumaAdapter);
   });
 });
 
@@ -109,7 +116,7 @@ describe('Luma schemas', () => {
       approvalStatus: 'approved',
       amount: 4500,
       currency: 'usd',
-      tickets: [{ ticketKey: 'k', ticketTypeId: 't', status: 'active', amount_paid: 4500 }],
+      tickets: [{ id: 'evtticket-1', ticketTypeId: 't', ticketTypeName: 'GA', amount_paid: 4500 }],
     });
     expect(parsed.email).toBe('someone@example.com');
     expect(JSON.stringify(parsed)).not.toMatch(/amount|currency/);

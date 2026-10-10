@@ -32,9 +32,19 @@ export class TestDb {
     return rows;
   }
 
+  /** Run as the service_role (edge functions), with no user. */
+  async asService<T extends Row = Row>(text: string, params: unknown[] = []): Promise<T[]> {
+    await this.client.query('reset role');
+    await this.client.query(`select set_config('request.jwt.claims', $1, true)`, [JSON.stringify({ role: 'service_role' })]);
+    await this.client.query('set local role service_role');
+    const rows = (await this.client.query(text, params)).rows as T[];
+    await this.client.query('reset role');
+    return rows;
+  }
+
   /** Expect a statement to fail; a savepoint keeps the test transaction usable. */
   async expectError(
-    userId: string | null | 'owner',
+    userId: string | null | 'owner' | 'service',
     text: string,
     params: unknown[],
     match: { code?: string; message?: RegExp },
@@ -43,6 +53,7 @@ export class TestDb {
     let error: (Error & { code?: string }) | undefined;
     try {
       if (userId === 'owner') await this.sql(text, params);
+      else if (userId === 'service') await this.asService(text, params);
       else await this.as(userId, text, params);
     } catch (e) {
       error = e as Error & { code?: string };

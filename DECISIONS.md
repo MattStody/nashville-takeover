@@ -2,6 +2,83 @@
 
 Newest first. Each entry: decision, then why.
 
+## 2026-10-10 · Phase 2 (Luma integration)
+
+Verified against https://docs.luma.com (changelog through October 2026) and
+the published OpenAPI spec (`https://public-api.luma.com/openapi.json`).
+
+**Endpoints: the June 2026 flat-response routes.** `GET /v1/events/get`,
+`/v1/events/guests/list`, `/v1/events/guests/get`, `/v1/events/ticket-types/list`
+(with `include_hidden=true`), auth via `x-luma-api-key`. The older
+`/v1/event/*` routes still work but are deprecated and return nested shapes.
+
+**Check-ins are tracked in our database only.** Luma's API has no endpoint
+to set a guest's or ticket's check-in status (`guests/update-status` covers
+approved/declined/pending_approval/waitlist only). Luma does expose a
+per-ticket `checked_in_at`; we don't import it, so check-ins made in Luma's
+own check-in app don't show up here. Easy to add if staff will use both.
+
+**Tickets are keyed by Luma ticket id; ticket keys are learned.** Guest
+payloads carry the guest key (inside `check_in_qr_code`) and each ticket's `id`,
+but never a ticket key, even though `guests/get` accepts one. So:
+`tickets.luma_ticket_id` is the stable key, and `tickets.ticket_key` is
+nullable. When a scanned key isn't known locally, `luma-resolve-key` asks Luma
+which guest it belongs to, syncs that guest, and stores the key in
+`luma_key_aliases` (pinned to a ticket when the guest has exactly one), so the
+next scan resolves offline. `resolve_check_in_key()` checks guest key → ticket
+key/id → alias.
+
+**Webhook authenticity: URL token + re-fetch, not signatures.** Luma returns
+a `secret` when a webhook is created but doesn't document a signing scheme,
+so we can't verify signatures. Instead: (1) the webhook URL carries a 32+ char
+random `LUMA_WEBHOOK_TOKEN`, compared in constant time; (2) the guest is
+re-fetched from the Luma API and that answer is stored, with the payload used
+only if Luma is unreachable. A forged request without the token is rejected;
+even with it, it can at most trigger a re-fetch of real data. Re-fetching also
+makes out-of-order deliveries harmless. If Luma publishes a signing scheme,
+add verification in `luma-webhook` alongside the token.
+
+**Webhook de-duplication by body hash.** Luma sends no delivery id, so the
+SHA-256 of the raw body is the receipt id. The receipt is deleted if
+processing fails so Luma's retry is processed.
+
+**Webhook types handled:** `guest.registered`, `guest.updated` and
+`ticket.registered` (all carry the full guest with `event_tickets` and
+`event`). Others, including `guest.refunded`, are acknowledged and ignored.
+
+**Upserts happen in SQL.** `luma_upsert_guests` / `luma_upsert_ticket_types` are
+service-role-only functions: atomic per batch, tested in the Postgres suite,
+shared by sync and webhook. A guest payload is treated as that guest's full
+current state: tickets no longer listed become `invalidated` (never deleted, so
+check-in history survives) and can be reactivated. Unknown ticket types seen in
+a webhook are created from the ticket's type name. Sync only refreshes type
+names, so a manager's hide/reorder choices survive. Unchanged rows aren't
+rewritten.
+
+**Payment status is ignored.** `is_captured` and all amounts are dropped at the
+adapter. A ticket is valid when Luma lists it and the guest is `approved`.
+
+**Backfills are resumable.** `luma-sync` stops starting new pages after
+`SYNC_TIME_BUDGET_MS` (default 100s, under the edge function limit), saves the
+cursor on the run, and returns `done: false` with the `run_id`; calling again
+with that `run_id` continues. One running sync per event (409 otherwise); runs
+idle for 5 minutes are treated as abandoned.
+
+**Rate limits.** Luma allows 200 req/min per calendar key and blocks for ~60s
+after a 429. The client honours `Retry-After`, paces itself when
+`X-RateLimit-Remaining` hits 0, retries 5xx and network errors with
+backoff (3 attempts), and gives up rather than wait more than 65s at once.
+Errors never include the API key.
+
+**Functions authenticate callers themselves** (`verify_jwt = false`): the
+service role key (cron) or a user JWT checked with `my_event_role()`. Luma
+can't send a JWT, and this also works with Supabase's newer non-JWT API keys.
+
+**Shared code is vendored into `supabase/functions/_shared/nt`.** Supabase's
+bundler doesn't reliably include files outside `supabase/functions`, so
+`pnpm functions:vendor` copies `packages/shared/src` there and a test fails if
+the copy drifts. `deno check` runs in CI.
+
 ## 2026-10-10 · Phase 1 (foundation)
 
 **New repository, separate from agency-os.** Nothing is shared with the

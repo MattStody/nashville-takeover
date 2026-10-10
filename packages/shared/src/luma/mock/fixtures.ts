@@ -5,6 +5,11 @@ export interface MockEvent {
   event: LumaEvent;
   ticketTypes: LumaTicketType[];
   guests: LumaGuest[];
+  /**
+   * Ticket key -> ticket id. Like the real API, keys are not on the guest
+   * payload; the mock only uses them to answer guests/get lookups.
+   */
+  ticketKeys: Record<string, string>;
 }
 
 export interface MockDataset {
@@ -81,14 +86,15 @@ function weightedPick(rng: Rng, types: LumaTicketType[], specs: EventSpec['ticke
 function approvalStatus(rng: Rng): string {
   const r = rng.next();
   if (r < 0.9) return 'approved';
-  if (r < 0.95) return 'pending_approval';
-  if (r < 0.98) return 'waitlist';
+  if (r < 0.94) return 'pending_approval';
+  if (r < 0.97) return 'waitlist';
   return 'declined';
 }
 
 /**
  * Deterministic fake Luma data. Some attendees appear at several events under
- * the same email so cross-event ticket linking is exercised.
+ * the same email so cross-event ticket linking is exercised, and some are not
+ * approved so invalid-ticket handling is exercised.
  */
 export function generateMockDataset(seed = 615): MockDataset {
   const rng = new Rng(seed);
@@ -120,17 +126,15 @@ export function generateMockDataset(seed = 615): MockDataset {
     const start = rng.int(0, people.length - spec.guestCount);
     const attendees = people.slice(start, start + spec.guestCount);
 
+    const ticketKeys: Record<string, string> = {};
     const guests = attendees.map((person): LumaGuest => {
       const ticketType = weightedPick(rng, ticketTypes, spec.ticketTypes);
       const ticketCount = rng.chance(0.15) ? rng.int(2, 4) : 1;
-      const tickets = Array.from(
-        { length: ticketCount },
-        (): LumaTicket => ({
-          ticketKey: rng.id(10),
-          ticketTypeId: ticketType.id,
-          status: rng.chance(0.03) ? 'cancelled' : 'active',
-        }),
-      );
+      const tickets = Array.from({ length: ticketCount }, (): LumaTicket => {
+        const id = `evtticket-${rng.id(14)}`;
+        ticketKeys[rng.id(10)] = id;
+        return { id, ticketTypeId: ticketType.id, ticketTypeName: ticketType.name };
+      });
       return {
         id: `gst-${rng.id(14)}`,
         eventId: event.id,
@@ -142,7 +146,7 @@ export function generateMockDataset(seed = 615): MockDataset {
       };
     });
 
-    return { event, ticketTypes, guests };
+    return { event, ticketTypes, guests, ticketKeys };
   });
 
   addDemoGuest(rng, events);
@@ -165,11 +169,11 @@ function addDemoGuest(rng: Rng, events: MockEvent[]): void {
       name: 'Demo Guest',
       email: DEMO_GUEST_EMAIL,
       approvalStatus: 'approved',
-      tickets: Array.from({ length: count }, () => ({
-        ticketKey: rng.id(10),
-        ticketTypeId: type.id,
-        status: 'active',
-      })),
+      tickets: Array.from({ length: count }, (): LumaTicket => {
+        const id = `evtticket-${rng.id(14)}`;
+        e.ticketKeys[rng.id(10)] = id;
+        return { id, ticketTypeId: type.id, ticketTypeName: type.name };
+      }),
     });
   }
 }

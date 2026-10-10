@@ -130,8 +130,12 @@ create table public.tickets (
   event_id uuid not null,
   guest_id uuid not null,
   ticket_type_id uuid not null,
-  ticket_key text not null unique,
-  status text not null default 'active',
+  -- Luma's ticket id. Luma's API does not return ticket keys (the per-ticket
+  -- QR value); ticket_key is filled in when a scan is resolved online.
+  luma_ticket_id text not null unique,
+  ticket_key text unique,
+  -- 'invalidated' when Luma no longer lists the ticket on its guest.
+  status text not null default 'active' check (status in ('active', 'invalidated')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   -- Composite FKs guarantee the guest and ticket type belong to the same event.
@@ -359,6 +363,10 @@ create table public.luma_sync_runs (
   finished_at timestamptz,
   guests_upserted int not null default 0,
   tickets_upserted int not null default 0,
+  -- Resume point while status = 'running'; a run that hits the edge function
+  -- time limit is continued by calling luma-sync again with its id.
+  cursor text,
+  updated_at timestamptz not null default now(),
   error text
 );
 

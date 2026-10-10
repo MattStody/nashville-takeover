@@ -34,14 +34,19 @@ export class MockLumaAdapter implements LumaAdapter {
     return { entries, nextCursor: next < guests.length ? encodeCursor(next) : null };
   }
 
+  /** Mirrors guests/get: accepts a guest id, guest key, ticket key or email. */
   async getGuest(eventId: string, lookup: GuestLookup): Promise<LumaGuest | null> {
-    const guests = this.byId.get(eventId)?.guests ?? [];
-    const match = guests.find((g) => {
-      if ('guestId' in lookup) return g.id === lookup.guestId;
-      if ('guestKey' in lookup) return g.guestKey === lookup.guestKey;
-      if ('ticketKey' in lookup) return g.tickets.some((t) => t.ticketKey === lookup.ticketKey);
-      return g.email === lookup.email.trim().toLowerCase();
-    });
+    const mock = this.byId.get(eventId);
+    if (!mock) return null;
+    const id = lookup.trim();
+    const ticketId = mock.ticketKeys[id];
+    const match = mock.guests.find(
+      (g) =>
+        g.id === id ||
+        g.guestKey === id ||
+        g.email === id.toLowerCase() ||
+        (ticketId !== undefined && g.tickets.some((t) => t.id === ticketId)),
+    );
     return match ?? null;
   }
 }

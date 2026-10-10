@@ -63,9 +63,35 @@ export interface TicketRow {
   event_id: string;
   guest_id: string;
   ticket_type_id: string;
-  ticket_key: string;
-  status: string;
+  luma_ticket_id: string;
+  /** Learned when a per-ticket QR is resolved online; Luma's API does not expose it. */
+  ticket_key: string | null;
+  status: 'active' | 'invalidated';
 }
+
+export interface LumaSyncRunRow {
+  id: string;
+  event_id: string;
+  trigger: 'manual' | 'cron' | 'webhook';
+  status: 'running' | 'succeeded' | 'failed';
+  started_by: string | null;
+  started_at: string;
+  finished_at: string | null;
+  guests_upserted: number;
+  tickets_upserted: number;
+  cursor: string | null;
+  updated_at: string;
+  error: string | null;
+}
+
+/** Row of resolve_check_in_key. */
+export interface ResolvedCheckInKey {
+  ticket_id: string;
+  guest_id: string;
+  matched_by: 'guest_key' | 'ticket_key' | 'alias';
+}
+
+export type EventRoleName = 'admin' | 'manager' | 'staff' | 'guest';
 
 export interface PerkRow {
   id: string;
@@ -139,5 +165,7 @@ export const RPC_ERRORS = [
   'perk_outside_window',
   'perk_exhausted',
   'check_in_not_found',
+  'event_not_found',
+  'guest_not_found',
 ] as const;
 export type RpcError = (typeof RPC_ERRORS)[number];

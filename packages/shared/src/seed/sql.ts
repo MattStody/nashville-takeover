@@ -159,8 +159,7 @@ export function generateSeedSql(dataset: MockDataset = generateMockDataset()): s
           event_id: eventId,
           guest_id: guestId,
           ticket_type_id: typeIds.get(t.ticketTypeId)!,
-          ticket_key: t.ticketKey,
-          status: t.status,
+          luma_ticket_id: t.id,
         });
       }
     }

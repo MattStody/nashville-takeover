@@ -22,22 +22,24 @@ export const LumaTicketTypeSchema = z.object({
 });
 export type LumaTicketType = z.infer<typeof LumaTicketTypeSchema>;
 
+// Luma's API exposes each ticket's id but not its ticket key (the value in a
+// per-ticket QR code). Keys are learned when a scan is resolved online.
 export const LumaTicketSchema = z.object({
-  ticketKey: z.string().min(1),
+  id: z.string().min(1),
   ticketTypeId: z.string().min(1),
-  /** 'active' or 'cancelled'. Live values are confirmed against the docs in Phase 2. */
-  status: z.string(),
+  /** Ticket type name as Luma reports it on the ticket. */
+  ticketTypeName: z.string(),
 });
 export type LumaTicket = z.infer<typeof LumaTicketSchema>;
 
 export const LumaGuestSchema = z.object({
   id: z.string().min(1),
   eventId: z.string().min(1),
-  /** Guest key, starts with "g-". Used in Luma's check-in QR codes. */
-  guestKey: z.string().min(1),
+  /** Guest key, starts with "g-". Taken from the guest's check-in QR code. */
+  guestKey: z.string().regex(/^g-/),
   name: z.string().nullable(),
   email: z.string().trim().toLowerCase().email(),
-  /** e.g. approved, pending_approval, declined, waitlist. Only approved guests can check in. */
+  /** approved, pending_approval, invited, declined, waitlist or session. Only approved guests can check in. */
   approvalStatus: z.string(),
   tickets: z.array(LumaTicketSchema),
 });
@@ -49,9 +51,8 @@ export interface Page<T> {
   nextCursor: string | null;
 }
 
-/** Luma's guests/get accepts any one of these identifiers. */
-export type GuestLookup =
-  | { guestId: string }
-  | { guestKey: string }
-  | { ticketKey: string }
-  | { email: string };
+/**
+ * Any identifier Luma's guests/get accepts: guest id (gst-), guest key (g-),
+ * ticket key, or email.
+ */
+export type GuestLookup = string;

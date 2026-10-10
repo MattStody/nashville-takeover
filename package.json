@@ -9,6 +9,8 @@
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "test:db": "pnpm --filter @nt/supabase test",
-    "seed:generate": "pnpm --filter @nt/shared seed:generate"
+    "seed:generate": "pnpm --filter @nt/shared seed:generate",
+    "functions:vendor": "pnpm --filter @nt/shared functions:vendor",
+    "functions:check": "deno check --config supabase/functions/deno.json supabase/functions/*/index.ts"
   }
 }

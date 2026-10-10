@@ -131,9 +131,9 @@ export async function createTicket(
 ): Promise<string> {
   return insertOne(
     db,
-    `insert into public.tickets (event_id, guest_id, ticket_type_id, ticket_key, status)
+    `insert into public.tickets (event_id, guest_id, ticket_type_id, luma_ticket_id, status)
      values ($1, $2, $3, $4, $5) returning id`,
-    [eventId, guestId, ticketTypeId, `tk-${uniq()}`, status],
+    [eventId, guestId, ticketTypeId, `evtticket-${uniq()}`, status],
   );
 }
 
@@ -201,7 +201,7 @@ export async function buildWorld(db: TestDb): Promise<World> {
     g1aVip: await createTicket(db, events.a, g1a, ticketTypes.aVip),
     g1bGa: await createTicket(db, events.b, g1b, ticketTypes.bGa),
     g2aGa: await createTicket(db, events.a, g2a, ticketTypes.aGa),
-    cancelledA: await createTicket(db, events.a, cancelledA, ticketTypes.aGa, 'cancelled'),
+    cancelledA: await createTicket(db, events.a, cancelledA, ticketTypes.aGa, 'invalidated'),
     declinedA: await createTicket(db, events.a, declinedA, ticketTypes.aGa),
   };
 
