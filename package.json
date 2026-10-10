@@ -1,0 +1,14 @@
+{
+  "name": "nashville-takeover",
+  "private": true,
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "test:db": "pnpm --filter @nt/supabase test",
+    "seed:generate": "pnpm --filter @nt/shared seed:generate"
+  }
+}
