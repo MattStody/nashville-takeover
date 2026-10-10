@@ -1,5 +1,16 @@
 # Architectural decisions
 
+## Standing rule · No guest contact during the build
+
+Guests must not be contacted while the platform is built: no email, SMS, push,
+Luma invites or blasts, no guest status changes in Luma. Enforced by a test
+that allow-lists the Luma endpoints the code may call and fails on any
+email/SMS/push sending code. Guest-facing sending (Phase 4 push, Phase 6
+notifications) will ship behind a `GUEST_CONTACT_ENABLED` switch that stays off
+until the owner turns it on for launch. Sign-in emails only ever go to someone
+who requests a code themselves, and during the build only staff/test accounts
+will use the apps.
+
 Newest first. Each entry: decision, then why.
 
 ## 2026-10-10 · Phase 2 (Luma integration)
