@@ -4,11 +4,14 @@
 //   { "action": "sync", "event_id": "<uuid>", "run_id"?: "<uuid>" }  manager+
 //   { "action": "link", "luma_event_id": "evt-..." }                   admin
 //   { "action": "sync_all" }                                           service role (cron)
+//   { "action": "status" }                                             service role / admin
+//   { "action": "register_webhook" }                                   service role / admin
 import { z } from 'zod';
-import { runBackfill } from '../_shared/nt/index.ts';
+import { GUEST_WEBHOOK_TYPES, runBackfill } from '../_shared/nt/index.ts';
 import { env } from '../_shared/env.ts';
 import { handler, HttpError, json, log, readJson } from '../_shared/http.ts';
 import { authenticate, lumaAdapter, requireAdmin, requireEventRole, serviceClient, type Caller } from '../_shared/supabase.ts';
+import { internalSecret } from '../_shared/secrets.ts';
 import { SupabaseSyncStore } from '../_shared/store.ts';
 
 const FN = 'luma-sync';
@@ -19,7 +22,45 @@ const Body = z.discriminatedUnion('action', [
   z.object({ action: z.literal('sync'), event_id: z.string().uuid(), run_id: z.string().uuid().optional() }),
   z.object({ action: z.literal('link'), luma_event_id: z.string().regex(/^evt-[A-Za-z0-9]+$/) }),
   z.object({ action: z.literal('sync_all') }),
+  z.object({ action: z.literal('status') }),
+  z.object({ action: z.literal('register_webhook') }),
 ]);
+
+/** Our webhook endpoint, without the token, for matching Luma's list. */
+function webhookBase(): string {
+  return `${env().SUPABASE_URL.replace(/\/$/, '')}/functions/v1/luma-webhook`;
+}
+
+/** Status for operators. Never includes keys, tokens or webhook URLs. */
+async function status() {
+  const e = env();
+  const adapter = lumaAdapter(FN);
+  let webhook: { registered: boolean; id?: string; status?: string | null } | { error: string };
+  try {
+    const hooks = await adapter.listWebhooks();
+    const ours = hooks.find((h) => h.url.startsWith(webhookBase()));
+    webhook = ours ? { registered: true, id: ours.id, status: ours.status } : { registered: false };
+  } catch (err) {
+    webhook = { error: (err as Error).name };
+  }
+  return { luma_mode: e.LUMA_MODE, luma_api_key_set: !!e.LUMA_API_KEY, webhook };
+}
+
+/** Registers luma-webhook with Luma (idempotent). The URL token stays server-side. */
+async function registerWebhook() {
+  const e = env();
+  const token = e.LUMA_WEBHOOK_TOKEN ?? (await internalSecret(serviceClient(), 'luma_webhook_token'));
+  const url = `${webhookBase()}?token=${encodeURIComponent(token)}`;
+  const adapter = lumaAdapter(FN);
+  const hooks = await adapter.listWebhooks();
+  const exact = hooks.find((h) => h.url === url);
+  if (exact) return { status: 'exists', id: exact.id, luma_mode: e.LUMA_MODE };
+  const stale = hooks.filter((h) => h.url.startsWith(webhookBase())).map((h) => h.id);
+  const created = await adapter.createWebhook(url, GUEST_WEBHOOK_TYPES);
+  log('info', FN, 'webhook_registered', { id: created.id, stale_ids: stale });
+  // Older registrations with a different token are left for an operator to remove.
+  return { status: 'created', id: created.id, stale_ids: stale, luma_mode: e.LUMA_MODE };
+}
 
 interface EventRef {
   id: string;
@@ -144,6 +185,16 @@ Deno.serve(
       }
       const sync = await syncEvent(caller, { id: eventId, luma_event_id: body.luma_event_id }, undefined, deadline);
       return json({ event_id: eventId, ...sync });
+    }
+
+    if (body.action === 'status') {
+      await requireAdmin(caller);
+      return json(await status());
+    }
+
+    if (body.action === 'register_webhook') {
+      await requireAdmin(caller);
+      return json(await registerWebhook());
     }
 
     // sync_all: cron only. Resumes running runs first, then starts the rest.

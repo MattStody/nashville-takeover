@@ -224,7 +224,7 @@ language plpgsql stable security definer
 set search_path = ''
 as $$
 begin
-  if not private.is_event_staff(p_event_id) then
+  if coalesce(auth.role(), '') <> 'service_role' and not private.is_event_staff(p_event_id) then
     raise exception 'not_event_staff' using errcode = '42501';
   end if;
 

@@ -1,6 +1,6 @@
 // GENERATED from packages/shared/src by `pnpm functions:vendor`. Do not edit.
 import type { LumaAdapter, LumaAdapterCapabilities } from '../adapter.ts';
-import type { GuestLookup, LumaEvent, LumaGuest, LumaTicketType, Page } from '../types.ts';
+import type { GuestLookup, LumaEvent, LumaGuest, LumaTicketType, LumaWebhook, Page } from '../types.ts';
 import { generateMockDataset, type MockDataset, type MockEvent } from './fixtures.ts';
 
 const DEFAULT_PAGE_SIZE = 50;
@@ -10,6 +10,7 @@ export class MockLumaAdapter implements LumaAdapter {
   readonly mode = 'mock' as const;
   readonly capabilities: LumaAdapterCapabilities = { checkInWriteBack: false };
   private readonly byId: Map<string, MockEvent>;
+  private readonly webhooks: LumaWebhook[] = [];
 
   constructor(dataset: MockDataset = generateMockDataset()) {
     this.byId = new Map(dataset.events.map((e) => [e.event.id, e]));
@@ -49,6 +50,16 @@ export class MockLumaAdapter implements LumaAdapter {
         (ticketId !== undefined && g.tickets.some((t) => t.id === ticketId)),
     );
     return match ?? null;
+  }
+
+  async listWebhooks(): Promise<LumaWebhook[]> {
+    return [...this.webhooks];
+  }
+
+  async createWebhook(url: string, eventTypes: readonly string[]): Promise<LumaWebhook> {
+    const webhook = { id: `wh-mock-${this.webhooks.length + 1}`, url, eventTypes: [...eventTypes], status: 'active' };
+    this.webhooks.push(webhook);
+    return webhook;
   }
 }
 

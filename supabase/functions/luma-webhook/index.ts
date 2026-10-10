@@ -2,14 +2,16 @@
 //
 // Luma documents a per-webhook secret but not a signing scheme, so we don't
 // trust the payload on its own:
-//   1. The webhook URL carries a long random token (?token=...), checked in
-//      constant time. Requests without it are rejected.
+//   1. The webhook URL carries a long random token (?token=...), generated in
+//      Supabase Vault and checked in constant time. Requests without it are
+//      rejected.
 //   2. The guest is re-fetched from the Luma API and that answer is stored;
 //      the payload is only a fallback if Luma's API is unreachable.
 // Deliveries are de-duplicated by a hash of the body.
 import { parseLumaWebhook, safeEqual, webhookReceiptId, type LumaGuest } from '../_shared/nt/index.ts';
 import { env } from '../_shared/env.ts';
 import { handler, HttpError, json, log } from '../_shared/http.ts';
+import { internalSecret } from '../_shared/secrets.ts';
 import { lumaAdapter, serviceClient } from '../_shared/supabase.ts';
 
 const FN = 'luma-webhook';
@@ -17,8 +19,9 @@ const MAX_BODY = 1_000_000;
 
 Deno.serve(
   handler(FN, async (req) => {
-    const expected = env().LUMA_WEBHOOK_TOKEN;
-    if (!expected) throw new HttpError(503, 'webhook_not_configured');
+    // An explicit LUMA_WEBHOOK_TOKEN secret wins; otherwise the Vault-held token
+    // that luma-sync's register_webhook action put in the URL.
+    const expected = env().LUMA_WEBHOOK_TOKEN ?? (await internalSecret(serviceClient(), 'luma_webhook_token'));
     const token = new URL(req.url).searchParams.get('token') ?? '';
     if (!safeEqual(token, expected)) throw new HttpError(401, 'invalid_token');
 

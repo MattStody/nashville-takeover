@@ -1,4 +1,4 @@
-import type { GuestLookup, LumaEvent, LumaGuest, LumaTicketType, Page } from './types.ts';
+import type { GuestLookup, LumaEvent, LumaGuest, LumaTicketType, LumaWebhook, Page } from './types.ts';
 
 export type LumaMode = 'mock' | 'live';
 
@@ -18,4 +18,6 @@ export interface LumaAdapter {
   listTicketTypes(eventId: string): Promise<LumaTicketType[]>;
   listGuests(eventId: string, opts?: { cursor?: string | null; limit?: number }): Promise<Page<LumaGuest>>;
   getGuest(eventId: string, lookup: GuestLookup): Promise<LumaGuest | null>;
+  listWebhooks(): Promise<LumaWebhook[]>;
+  createWebhook(url: string, eventTypes: readonly string[]): Promise<LumaWebhook>;
 }

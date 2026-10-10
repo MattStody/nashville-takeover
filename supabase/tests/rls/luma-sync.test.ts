@@ -196,10 +196,24 @@ describe('resolve_check_in_key', () => {
     });
   });
 
+  it('lets the service role (edge functions) resolve keys', async () => {
+    const rows = await getDb().asService(`select matched_by from public.resolve_check_in_key($1, 'g-7')`, [w.events.a]);
+    expect(rows).toHaveLength(2);
+  });
+
   it('is staff-only', async () => {
     await getDb().expectError(w.users.guest1, `select * from public.resolve_check_in_key($1, 'g-7')`, [w.events.a], {
       message: /not_event_staff/,
     });
+  });
+});
+
+describe('internal_secret', () => {
+  it('is not callable by any signed-in user, admins included', async () => {
+    for (const user of [w.users.admin, w.users.managerA, w.users.guest1]) {
+      await getDb().expectError(user, `select public.internal_secret('internal_cron_token')`, [], { code: '42501' });
+    }
+    await getDb().expectError(null, `select public.internal_secret('internal_cron_token')`, [], { code: '42501' });
   });
 });
 

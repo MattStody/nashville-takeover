@@ -235,3 +235,57 @@ describe('webhooks', () => {
     expect(guestKeyFromQr(`https://luma.com/check-in/${EVENT_ID}?pk=TICKETKEY`)).toBeNull();
   });
 });
+
+describe('webhook registration', () => {
+  it('lists webhooks across pages and never keeps their secrets', async () => {
+    const { a, calls } = adapter([
+      json({ entries: [{ id: 'wh1', url: 'https://a', event_types: ['*'], status: 'active', secret: 'S1' }], has_more: true, next_cursor: 'n' }),
+      json({ entries: [{ id: 'wh2', url: 'https://b', event_types: ['guest.updated'], status: 'paused', secret: 'S2' }], has_more: false }),
+    ]);
+    const hooks = await a.listWebhooks();
+    expect(hooks).toEqual([
+      { id: 'wh1', url: 'https://a', eventTypes: ['*'], status: 'active' },
+      { id: 'wh2', url: 'https://b', eventTypes: ['guest.updated'], status: 'paused' },
+    ]);
+    expect(JSON.stringify(hooks)).not.toMatch(/S1|S2|secret/);
+    expect(calls[0]!.url.pathname).toBe('/v1/webhooks/list');
+    expect(calls[1]!.url.searchParams.get('pagination_cursor')).toBe('n');
+  });
+
+  it('creates a webhook with a JSON POST', async () => {
+    const f = fakeFetch([json({ id: 'wh9', url: 'https://x', event_types: ['guest.updated'], status: 'active', secret: 'S' })]);
+    let sent: RequestInit | undefined;
+    const spy = (async (input: string | URL | Request, init?: RequestInit) => {
+      sent = init;
+      return f.impl(input, init);
+    }) as typeof fetch;
+    const a = new LiveLumaAdapter({ apiKey: 'k', fetch: spy, sleep: async () => {} });
+    const hook = await a.createWebhook('https://x', ['guest.updated']);
+    expect(hook).toEqual({ id: 'wh9', url: 'https://x', eventTypes: ['guest.updated'], status: 'active' });
+    expect(f.calls[0]!.url.pathname).toBe('/v2/webhooks/create');
+    expect(sent?.method).toBe('POST');
+    expect(JSON.parse(String(sent?.body))).toEqual({ url: 'https://x', event_types: ['guest.updated'] });
+    expect(new Headers(sent?.headers).get('content-type')).toBe('application/json');
+  });
+
+  it('does not retry a POST after a server error (it may have succeeded)', async () => {
+    const { a, calls, sleeps } = adapter([json({}, 502), json({ id: 'dup', url: 'u', event_types: [] })]);
+    await expect(a.createWebhook('https://x', ['*'])).rejects.toMatchObject({ status: 502 });
+    expect(calls).toHaveLength(1);
+    expect(sleeps).toEqual([]);
+  });
+
+  it('does retry a POST after a 429 (Luma rejected it before acting)', async () => {
+    const { a, calls } = adapter([json({}, 429, { 'retry-after': '1' }), json({ id: 'wh', url: 'u', event_types: [] })]);
+    expect((await a.createWebhook('https://x', ['*'])).id).toBe('wh');
+    expect(calls).toHaveLength(2);
+  });
+
+  it('mock adapter keeps webhooks in memory', async () => {
+    const { MockLumaAdapter } = await import('../src/index.ts');
+    const m = new MockLumaAdapter();
+    expect(await m.listWebhooks()).toEqual([]);
+    await m.createWebhook('https://x', ['guest.updated']);
+    expect((await m.listWebhooks()).map((w) => w.url)).toEqual(['https://x']);
+  });
+});

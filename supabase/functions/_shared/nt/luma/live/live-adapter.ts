@@ -1,6 +1,6 @@
 // GENERATED from packages/shared/src by `pnpm functions:vendor`. Do not edit.
 import type { LumaAdapter, LumaAdapterCapabilities } from '../adapter.ts';
-import type { GuestLookup, LumaEvent, LumaGuest, LumaTicketType, Page } from '../types.ts';
+import type { GuestLookup, LumaEvent, LumaGuest, LumaTicketType, LumaWebhook, Page } from '../types.ts';
 import { LumaGuestSchema } from '../types.ts';
 import { parseCheckInQr } from '../../qr/parse.ts';
 import { LumaContractError, LumaHttp, type LumaHttpOptions } from './http.ts';
@@ -9,6 +9,8 @@ import {
   RawGuestListSchema,
   RawGuestSchema,
   RawTicketTypeListSchema,
+  RawWebhookListSchema,
+  RawWebhookSchema,
   type RawGuest,
 } from './raw.ts';
 
@@ -117,5 +119,27 @@ export class LiveLumaAdapter implements LumaAdapter {
       { allowNotFound: true },
     );
     return raw ? normalizeGuest(raw, eventId) : null;
+  }
+
+  async listWebhooks(): Promise<LumaWebhook[]> {
+    const out: LumaWebhook[] = [];
+    let cursor: string | undefined;
+    do {
+      const raw = await this.http.get(
+        '/v1/webhooks/list',
+        { pagination_cursor: cursor, pagination_limit: 50 },
+        RawWebhookListSchema,
+      );
+      for (const w of raw?.entries ?? []) {
+        out.push({ id: w.id, url: w.url, eventTypes: w.event_types, status: w.status ?? null });
+      }
+      cursor = raw?.has_more && raw.next_cursor ? raw.next_cursor : undefined;
+    } while (cursor);
+    return out;
+  }
+
+  async createWebhook(url: string, eventTypes: readonly string[]): Promise<LumaWebhook> {
+    const w = await this.http.post('/v2/webhooks/create', { url, event_types: eventTypes }, RawWebhookSchema);
+    return { id: w.id, url: w.url, eventTypes: w.event_types, status: w.status ?? null };
   }
 }

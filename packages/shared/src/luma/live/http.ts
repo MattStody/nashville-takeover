@@ -87,10 +87,31 @@ export class LumaHttp {
     schema: S,
     { allowNotFound = false } = {},
   ): Promise<z.infer<S> | null> {
+    return this.request('GET', path, params, undefined, schema, allowNotFound);
+  }
+
+  /**
+   * POST a JSON body. Writes are not idempotent, so only 429s (which Luma
+   * rejects before acting) are retried; 5xx and network errors are surfaced.
+   */
+  async post<S extends z.ZodTypeAny>(path: string, body: unknown, schema: S): Promise<z.infer<S>> {
+    const result = await this.request('POST', path, {}, body, schema, false);
+    return result as z.infer<S>;
+  }
+
+  private async request<S extends z.ZodTypeAny>(
+    method: 'GET' | 'POST',
+    path: string,
+    params: Record<string, string | number | undefined | null>,
+    body: unknown,
+    schema: S,
+    allowNotFound: boolean,
+  ): Promise<z.infer<S> | null> {
     const url = new URL(this.baseUrl + path);
     for (const [k, v] of Object.entries(params)) {
       if (v !== undefined && v !== null && v !== '') url.searchParams.set(k, String(v));
     }
+    const safeToRetry = method === 'GET';
 
     for (let attempt = 0; ; attempt++) {
       await this.waitForWindow();
@@ -98,12 +119,17 @@ export class LumaHttp {
       let res: Response;
       try {
         res = await this.fetchImpl(url, {
-          method: 'GET',
-          headers: { 'x-luma-api-key': this.opts.apiKey, accept: 'application/json' },
+          method,
+          headers: {
+            'x-luma-api-key': this.opts.apiKey,
+            accept: 'application/json',
+            ...(body === undefined ? {} : { 'content-type': 'application/json' }),
+          },
+          body: body === undefined ? undefined : JSON.stringify(body),
           signal: AbortSignal.timeout(this.timeoutMs),
         });
       } catch (e) {
-        if (attempt >= this.maxRetries) {
+        if (!safeToRetry || attempt >= this.maxRetries) {
           throw new LumaApiError(`Network error calling Luma ${path}: ${(e as Error).message}`, null, true);
         }
         await this.wait(this.backoff(attempt), 'network');
@@ -122,7 +148,7 @@ export class LumaHttp {
         continue;
       }
       if (res.status >= 500) {
-        if (attempt >= this.maxRetries) {
+        if (!safeToRetry || attempt >= this.maxRetries) {
           throw new LumaApiError(`Luma ${path} failed with ${res.status}`, res.status, true);
         }
         await this.wait(this.backoff(attempt), 'server_error');

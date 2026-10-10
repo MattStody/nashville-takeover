@@ -67,7 +67,8 @@ Edge functions (Deno):
 | `luma-sync` | manager+ | `{"action":"sync","event_id":"<uuid>"}`; repeat with the returned `run_id` while `done` is false |
 | `luma-sync` | admin | `{"action":"link","luma_event_id":"evt-..."}` creates a draft event from Luma and syncs it |
 | `luma-sync` | service role | `{"action":"sync_all"}` for the cron job |
-| `luma-webhook` | Luma | registered at `https://<ref>.supabase.co/functions/v1/luma-webhook?token=<LUMA_WEBHOOK_TOKEN>` |
+| `luma-sync` | admin / service | `{"action":"status"}` (mode, key set, webhook registered) and `{"action":"register_webhook"}` |
+| `luma-webhook` | Luma | registered by `register_webhook` with a Vault-generated `?token=` |
 | `luma-resolve-key` | staff+ | `{"event_id":"<uuid>","key":"<pk>"}` for QR keys not known locally |
 
 Mock mode (`LUMA_MODE=mock`, the default) serves the same fake dataset the
@@ -75,30 +76,39 @@ seed uses, so everything runs without a Luma key.
 
 ### Deploying (project `xmwyrppnznisdhmervye`)
 
+Migrations and functions are deployed with the Supabase connector or CLI:
+
 ```bash
 supabase link --project-ref xmwyrppnznisdhmervye
-supabase db push                      # migrations
+supabase db push
 pnpm functions:vendor
 supabase functions deploy luma-sync luma-webhook luma-resolve-key
-supabase secrets set LUMA_WEBHOOK_TOKEN=$(openssl rand -hex 32)
-# Already set in the dashboard: LUMA_API_KEY. Switch to live when ready:
-supabase secrets set LUMA_MODE=live
 ```
 
-Register the webhook with Luma (`POST /v2/webhooks/create`) for
-`guest.registered`, `guest.updated` and `ticket.registered`, using the URL in
-the table above.
+Edge function secrets (Dashboard → Edge Functions → Secrets): `LUMA_API_KEY`,
+and `LUMA_MODE=live` once ready. Nothing else: the webhook URL token and the
+cron token are generated inside the database (Supabase Vault, see
+`internal_secret()`), and functions read Supabase's own keys from the
+environment (new `sb_` keys preferred, legacy keys as fallback).
 
-Hourly backfill (run once in the SQL editor; needs `pg_cron` and `pg_net`, and
-the service role key stored in Vault as `service_role_key`):
+Register the webhook with Luma (idempotent; the token never leaves Supabase):
+
+```sql
+select net.http_post(
+  url := 'https://xmwyrppnznisdhmervye.supabase.co/functions/v1/luma-sync',
+  headers := jsonb_build_object('content-type', 'application/json',
+    'x-internal-token', public.internal_secret('internal_cron_token')),
+  body := '{"action":"register_webhook"}'::jsonb);
+```
+
+Hourly backfill:
 
 ```sql
 select cron.schedule('luma-sync-all', '7 * * * *', $$
   select net.http_post(
     url := 'https://xmwyrppnznisdhmervye.supabase.co/functions/v1/luma-sync',
-    headers := jsonb_build_object(
-      'content-type', 'application/json',
-      'authorization', 'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'service_role_key')),
+    headers := jsonb_build_object('content-type', 'application/json',
+      'x-internal-token', public.internal_secret('internal_cron_token')),
     body := '{"action":"sync_all"}'::jsonb,
     timeout_milliseconds := 120000)
 $$);
@@ -113,6 +123,6 @@ Read-only check of a real event (prints shapes and counts, no personal data):
 | --- | --- | --- |
 | `LUMA_MODE` | Edge function secrets | `mock` (default) or `live` |
 | `LUMA_API_KEY` | Edge function secrets **only** | Luma API key (Luma Plus). Never in app env. |
-| `LUMA_WEBHOOK_TOKEN` | Edge function secrets | Random 32+ chars; part of the webhook URL |
+| `LUMA_WEBHOOK_TOKEN` | Edge function secrets (optional) | Overrides the Vault-generated webhook token |
 | `SYNC_TIME_BUDGET_MS` | Edge function secrets (optional) | Per-call sync budget, default 100000 |
 | `DATABASE_URL` | Local / CI | Postgres for the RLS test suite |

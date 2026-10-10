@@ -11,6 +11,7 @@ export { generateMockDataset, type MockDataset, type MockEvent } from './mock/fi
 export { LiveLumaAdapter, guestKeyFromQr, normalizeGuest } from './live/live-adapter.ts';
 export { LumaApiError, LumaContractError, LUMA_BASE_URL, type LumaHttpOptions } from './live/http.ts';
 export { parseLumaWebhook, safeEqual, webhookReceiptId, type ParsedLumaWebhook } from './live/webhook.ts';
+export { GUEST_WEBHOOK_TYPES } from './live/raw.ts';
 
 export interface LumaEnv {
   LUMA_MODE?: string;

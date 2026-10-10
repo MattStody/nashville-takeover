@@ -44,7 +44,9 @@ Deno.serve(
       if (aliasError) throw new HttpError(500, 'alias_failed', aliasError.message);
     }
 
-    const { data: tickets, error: resolveError } = await db.rpc('resolve_check_in_key', {
+    // Resolve as the caller where possible so RLS-backed checks apply to them.
+    const reader = caller.kind === 'user' ? caller.client : db;
+    const { data: tickets, error: resolveError } = await reader.rpc('resolve_check_in_key', {
       p_event_id: event.id,
       p_key: body.key,
     });

@@ -62,3 +62,18 @@ export const RawWebhookEnvelopeSchema = z.object({
   type: z.string(),
   data: z.unknown(),
 });
+
+// Webhook endpoints. The per-webhook `secret` is deliberately not declared, so
+// it is dropped here and never logged or stored.
+export const RawWebhookSchema = z.object({
+  id: z.string().min(1),
+  url: z.string(),
+  event_types: z.array(z.string()),
+  status: z.string().optional(),
+});
+
+export const RawWebhookListSchema = z.object({
+  entries: z.array(RawWebhookSchema),
+  has_more: z.boolean().optional(),
+  next_cursor: z.string().nullish(),
+});

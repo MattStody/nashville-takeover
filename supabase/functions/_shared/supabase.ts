@@ -1,11 +1,12 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { createLumaAdapter, type LumaAdapter } from './nt/index.ts';
+import { createLumaAdapter, safeEqual, type LumaAdapter } from './nt/index.ts';
 import { env } from './env.ts';
 import { HttpError, log } from './http.ts';
+import { internalSecret } from './secrets.ts';
 
 export function serviceClient(): SupabaseClient {
   const e = env();
-  return createClient(e.SUPABASE_URL, e.SUPABASE_SERVICE_ROLE_KEY, {
+  return createClient(e.SUPABASE_URL, e.secretKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 }
@@ -15,20 +16,30 @@ export type Caller =
   | { kind: 'user'; userId: string; client: SupabaseClient };
 
 /**
- * Identifies the caller from the Authorization header: the service role key
- * (cron, internal) or a signed-in user's JWT (dashboard, staff app).
+ * Identifies the caller:
+ *   - pg_cron, via the Vault-held internal token in x-internal-token;
+ *   - a backend holding a Supabase secret key (apikey header, or a legacy
+ *     service_role JWT as a Bearer token);
+ *   - a signed-in user's JWT (dashboard, staff app).
  */
 export async function authenticate(req: Request): Promise<Caller> {
   const e = env();
-  const token = req.headers.get('authorization')?.replace(/^Bearer\s+/i, '').trim();
-  if (!token) throw new HttpError(401, 'missing_authorization');
-  if (token === e.SUPABASE_SERVICE_ROLE_KEY) return { kind: 'service' };
+  const internal = req.headers.get('x-internal-token')?.trim();
+  if (internal) {
+    if (safeEqual(internal, await internalSecret(serviceClient(), 'internal_cron_token'))) return { kind: 'service' };
+    throw new HttpError(401, 'invalid_internal_token');
+  }
+  const bearer = req.headers.get('authorization')?.replace(/^Bearer\s+/i, '').trim() || null;
+  const apikey = req.headers.get('apikey')?.trim() || null;
+  const isServiceKey = (k: string | null) => !!k && e.serviceKeys.some((s) => safeEqual(k, s));
+  if (isServiceKey(apikey) || isServiceKey(bearer)) return { kind: 'service' };
+  if (!bearer) throw new HttpError(401, 'missing_authorization');
 
-  const client = createClient(e.SUPABASE_URL, e.SUPABASE_ANON_KEY, {
-    global: { headers: { Authorization: `Bearer ${token}` } },
+  const client = createClient(e.SUPABASE_URL, e.publishableKey, {
+    global: { headers: { Authorization: `Bearer ${bearer}` } },
     auth: { persistSession: false, autoRefreshToken: false },
   });
-  const { data, error } = await client.auth.getUser(token);
+  const { data, error } = await client.auth.getUser(bearer);
   if (error || !data.user) throw new HttpError(401, 'invalid_token');
   return { kind: 'user', userId: data.user.id, client };
 }

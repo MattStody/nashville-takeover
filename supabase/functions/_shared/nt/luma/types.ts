@@ -57,3 +57,11 @@ export interface Page<T> {
  * ticket key, or email.
  */
 export type GuestLookup = string;
+
+/** A webhook endpoint registered with Luma (its signing secret is not kept). */
+export interface LumaWebhook {
+  id: string;
+  url: string;
+  eventTypes: string[];
+  status: string | null;
+}
