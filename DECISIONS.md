@@ -13,6 +13,55 @@ will use the apps.
 
 Newest first. Each entry: decision, then why.
 
+## 2026-10-11 · Phase 3 (web dashboard)
+
+**Dashboard has no elevated access.** `apps/admin` (Next.js 15, App Router)
+uses only the publishable key and the signed-in user's session. Every read and
+write goes through RLS or the same security-definer RPCs the mobile app uses
+(`record_check_in`, `undo_check_in`, `adjust_perk`). Luma calls go through the
+`luma-sync` edge function, which re-checks the caller's role. No service key is
+ever deployed with the dashboard.
+
+**Sign-in is a magic link (Supabase Auth email).** The only email the platform
+sends is a sign-in link to someone who typed their own address on the login
+page. Guests are never emailed. Who can use the dashboard is decided by roles,
+not by who can sign in: anyone else lands on "no access".
+
+**Staff invites don't send email.** An admin records an invite (email + event
+role, or admin). It applies when that email signs in, or immediately if the
+account already exists. The admin shares the link themselves. This keeps the
+platform's outbound email at zero apart from sign-in links.
+
+**Ticket types have an "admits entry" flag.** Add-ons (e.g. After Party
+Upgrade) are tickets in Luma but don't get anyone through the door.
+`record_check_in` rejects them with `ticket_not_entry`; they still unlock
+perks. New types default to admitting entry; managers untick add-ons.
+
+**Manual check-ins are normal ops.** The dashboard calls `record_check_in`
+with `source = manual` and a fresh `op_id`, so manual and scanned check-ins
+share one ledger and conflict rule. Undo and perk adjustments require a reason
+and are written to `audit_log`.
+
+**Perks with redemptions can't be deleted.** Deleting a perk would cascade
+away its ledger; the dashboard refuses and suggests unmapping it instead.
+
+**Event-local times.** Forms take wall-clock times in the event's timezone and
+convert with `localInputToUtc` (shared, tested across DST). The database stores
+UTC only.
+
+**Images in a public Storage bucket.** `event-media` (5 MB, images only) holds
+hero, logo, lineup, map and sponsor images under `<event_id>/…`; storage RLS
+lets only that event's managers write. Event content is public anyway, so
+public URLs avoid signed-URL churn in the apps.
+
+**Free hosting for the MVP.** Vercel Hobby (non-commercial) for the dashboard;
+Supabase free/existing plan. Revisit before commercial use.
+
+**DB types are transcribed from `supabase gen types`.** `packages/shared/src/
+types/database.ts` mirrors the generated output (relationships omitted, so the
+dashboard does separate queries instead of embedded joins). Regenerate after
+schema changes.
+
 ## 2026-10-10 · Phase 2 (Luma integration)
 
 Verified against https://docs.luma.com (changelog through October 2026) and
@@ -215,5 +264,4 @@ Supabase's `auth` schema and roles, so tests run on any Postgres 15+ (CI uses a
 switches role with `set local role` + JWT claims, exactly like PostgREST.
 
 **Generated DB types later.** Hand-written domain types live in
-`packages/shared/src/types/domain.ts`. `supabase gen types` output is added
-once the Supabase project is linked (Phase 3), when the apps start querying.
+`packages/shared/src/types/domain.ts`. Generated types were added in Phase 3.

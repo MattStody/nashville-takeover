@@ -4,12 +4,12 @@ Event platform for The Nashville Takeover: a mobile app for guests and
 on-site staff, a web dashboard for managers, and a Supabase backend synced with
 Luma ticketing. No financial data is stored or displayed anywhere.
 
-Status: **Phase 2 (Luma integration)**. See `DECISIONS.md` for architecture.
+Status: **Phase 3 (web dashboard)**. See `DECISIONS.md` for architecture.
 
 ## Layout
 
 ```
-apps/admin          Next.js dashboard (Phase 3)
+apps/admin          Next.js dashboard for managers and admins
 apps/mobile         Expo app (Phases 4–5)
 packages/shared     Domain types, zod schemas, Luma adapter (mock + live), seed generator
 supabase/
@@ -117,6 +117,26 @@ $$);
 Read-only check of a real event (prints shapes and counts, no personal data):
 `LUMA_API_KEY=... pnpm --filter @nt/shared luma:smoke evt-...`
 
+## Dashboard (`apps/admin`)
+
+```bash
+cp apps/admin/.env.example apps/admin/.env.local   # fill in URL + publishable key
+pnpm --filter @nt/admin dev                        # http://localhost:3000
+```
+
+Sign in with a magic link. Access comes from roles: admins see everything,
+managers see their events, everyone else gets "no access". Admins invite staff
+on `/staff` (no email is sent; share the link yourself).
+
+### Deploying to Vercel (Hobby)
+
+1. Vercel → Add New → Project → import `MattStody/nashville-takeover`.
+2. Root Directory: `apps/admin` (framework auto-detects Next.js; pnpm is detected from the lockfile).
+3. Environment variables: `NEXT_PUBLIC_SUPABASE_URL` = `https://xmwyrppnznisdhmervye.supabase.co`,
+   `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` = the project's publishable key (Supabase → Project Settings → API Keys).
+4. Supabase → Authentication → URL Configuration: Site URL = the Vercel URL; add
+   `https://<your-app>.vercel.app/auth/callback` (and `http://localhost:3000/auth/callback` for local dev) to Redirect URLs.
+
 ## Environment variables
 
 | Name | Where | Purpose |
@@ -126,3 +146,5 @@ Read-only check of a real event (prints shapes and counts, no personal data):
 | `LUMA_WEBHOOK_TOKEN` | Edge function secrets (optional) | Overrides the Vault-generated webhook token |
 | `SYNC_TIME_BUDGET_MS` | Edge function secrets (optional) | Per-call sync budget, default 100000 |
 | `DATABASE_URL` | Local / CI | Postgres for the RLS test suite |
+| `NEXT_PUBLIC_SUPABASE_URL` | Dashboard (Vercel) | Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Dashboard (Vercel) | Publishable key (RLS applies; never the secret key) |

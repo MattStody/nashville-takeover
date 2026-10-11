@@ -18,7 +18,7 @@ function sourceFiles(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
     const full = join(dir, name);
     if (statSync(full).isDirectory()) return name === 'node_modules' ? [] : sourceFiles(full);
-    return full.endsWith('.ts') ? [full] : [];
+    return /\.tsx?$/.test(full) ? [full] : [];
   });
 }
 
@@ -26,6 +26,7 @@ describe('no guest contact', () => {
   const roots = [
     new URL('../src', import.meta.url).pathname,
     new URL('../../../supabase/functions', import.meta.url).pathname,
+    new URL('../../../apps/admin/src', import.meta.url).pathname,
   ];
   const files = roots.flatMap(sourceFiles);
 
@@ -39,7 +40,7 @@ describe('no guest contact', () => {
 
   // Staff sign-in and staff invites are allowed; these are guest-facing channels.
   it('has no code that sends guest email, SMS or push', () => {
-    const forbidden = /send-invites|blasts\/create|guests\/add|update-status|exp\.host|expo-server-sdk|sendgrid|resend\.com|twilio/;
+    const forbidden = /send-invites|blasts\/create|guests\/add|update-status|exp\.host|expo-server-sdk|sendgrid|resend\.com|twilio|inviteUserByEmail/;
     const hits = files.filter((f) => forbidden.test(readFileSync(f, 'utf8')));
     expect(hits).toEqual([]);
   });
