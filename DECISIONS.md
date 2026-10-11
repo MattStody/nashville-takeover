@@ -13,6 +13,16 @@ will use the apps.
 
 Newest first. Each entry: decision, then why.
 
+## 2026-10-11 · Brand (for Phase 4)
+
+From the Brand Guidelines (I AM Designs, 2026). The app uses the **light** feel:
+cream `#F6EFCE` backgrounds, dark teal `#1E3E41` text, orange `#E7603F` for
+accents and highlights, teal `#1F7E7B` for buttons. Headlines: Norsh (stamp),
+uppercase. Subheads and buttons: Gotham Bold, uppercase. Body: Gotham Book.
+The app icon uses the logomark (guitar player), as the guidelines recommend for
+icons; the full wordmark is unreadable at icon sizes. Font licensing for app
+embedding is still to be confirmed.
+
 ## 2026-10-11 · Phase 3 (web dashboard)
 
 **Dashboard has no elevated access.** `apps/admin` (Next.js 15, App Router)
