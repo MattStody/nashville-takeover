@@ -44,6 +44,8 @@ export interface TicketTypeRow {
   luma_ticket_type_id: string;
   name: string;
   is_hidden: boolean;
+  /** False for add-ons (e.g. "After Party Upgrade"): perks only, no check-in. */
+  admits_entry: boolean;
   sort_order: number;
 }
 
@@ -157,6 +159,7 @@ export const RPC_ERRORS = [
   'not_event_manager',
   'ticket_not_found',
   'ticket_not_valid',
+  'ticket_not_entry',
   'op_id_reused',
   'reason_required',
   'invalid_quantity',
