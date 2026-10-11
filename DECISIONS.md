@@ -13,6 +13,38 @@ will use the apps.
 
 Newest first. Each entry: decision, then why.
 
+## 2026-10-12 · Phase 4 (guest app)
+
+**Expo SDK 57, Expo Router, React Query.** `apps/mobile` targets iOS, Android
+and web from one codebase. React Query handles caching, pull-to-refresh and
+retry; there is no offline write path for guests (staff offline mode is
+Phase 5). Package versions are pinned to releases at least two weeks old.
+
+**Email code sign-in.** Guests type their email and get a code from Supabase
+Auth (`signInWithOtp` + `verifyOtp`). Only the person who typed the address
+gets an email. Guests are matched to Luma tickets by email; the app also calls
+`link_my_guests` on refresh to pick up tickets synced after sign-in.
+
+**One QR per guest.** The app shows `https://luma.com/check-in/<event>?pk=<guest
+key>`, the same format as Luma's. It covers all of a guest's tickets, and the
+staff scanner (Phase 5) already resolves guest keys. Luma's own emailed QR
+still works.
+
+**Push: register only.** With permission, the app saves its Expo push token
+via `register_push_token` (which also moves a token between accounts on a
+shared device) and removes it on sign-out. Nothing sends notifications yet;
+registration is skipped until an EAS project id exists (Phase 7).
+
+**Web preview build for testing.** The same app exports to static web
+(`expo export --platform web`) so it can be tried in a phone browser via a
+free Vercel project before store builds exist. Camera and push are native-only.
+
+**Perk balances never show below zero to guests.** Offline over-limit
+redemptions are a staff/manager concern; guests just see "0 left".
+
+**Bundle ids are placeholders** (`com.nashvilletakeover.app`) until the App
+Store / Play accounts exist.
+
 ## 2026-10-11 · Brand (for Phase 4)
 
 From the Brand Guidelines (I AM Designs, 2026). The app uses the **light** feel:

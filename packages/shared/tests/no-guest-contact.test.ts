@@ -27,6 +27,7 @@ describe('no guest contact', () => {
     new URL('../src', import.meta.url).pathname,
     new URL('../../../supabase/functions', import.meta.url).pathname,
     new URL('../../../apps/admin/src', import.meta.url).pathname,
+    new URL('../../../apps/mobile/src', import.meta.url).pathname,
   ];
   const files = roots.flatMap(sourceFiles);
 

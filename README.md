@@ -4,13 +4,13 @@ Event platform for The Nashville Takeover: a mobile app for guests and
 on-site staff, a web dashboard for managers, and a Supabase backend synced with
 Luma ticketing. No financial data is stored or displayed anywhere.
 
-Status: **Phase 3 (web dashboard)**. See `DECISIONS.md` for architecture.
+Status: **Phase 4 (guest app)**. See `DECISIONS.md` for architecture.
 
 ## Layout
 
 ```
 apps/admin          Next.js dashboard for managers and admins
-apps/mobile         Expo app (Phases 4–5)
+apps/mobile         Expo app: guest mode (Phase 4), staff mode (Phase 5)
 packages/shared     Domain types, zod schemas, Luma adapter (mock + live), seed generator
 supabase/
   migrations/       Schema, RLS, views, RPCs
@@ -136,6 +136,21 @@ on `/staff` (no email is sent; share the link yourself).
    `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` = the project's publishable key (Supabase → Project Settings → API Keys).
 4. Supabase → Authentication → URL Configuration: Site URL = the Vercel URL; add
    `https://<your-app>.vercel.app/auth/callback` (and `http://localhost:3000/auth/callback` for local dev) to Redirect URLs.
+
+## Guest app (`apps/mobile`)
+
+```bash
+pnpm --filter @nt/mobile start      # scan the QR with Expo Go (SDK 57) on your phone
+pnpm --filter @nt/mobile web        # or run it in a browser
+```
+
+It points at the production Supabase project by default (public URL and
+publishable key only). Sign-in uses an emailed code, so the Supabase
+**Magic Link** email template must include `{{ .Token }}`.
+
+**Web preview on Vercel:** add a second Vercel project from this repo with Root
+Directory `apps/mobile`. `apps/mobile/vercel.json` sets the build. No
+environment variables are needed.
 
 ## Environment variables
 

@@ -568,6 +568,7 @@ export type Database = {
       luma_upsert_guests: { Args: { p_event_id: string; p_guests: Json }; Returns: Json };
       luma_upsert_ticket_types: { Args: { p_event_id: string; p_types: Json }; Returns: number };
       my_event_role: { Args: { p_event_id: string }; Returns: string };
+      register_push_token: { Args: { p_platform: string; p_token: string }; Returns: undefined };
       record_check_in: {
         Args: {
           p_device_id?: string;
