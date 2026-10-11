@@ -19,6 +19,8 @@ const MESSAGES: Record<string, string> = {
   luma_rate_limited: 'Luma is rate limiting requests. Try again in a minute.',
   luma_unavailable: 'Luma did not respond. Try again shortly.',
   forbidden: 'You do not have permission to do that.',
+  over_email_send_rate_limit: 'Too many sign-in emails were sent recently. Wait about an hour, then request one new link.',
+  'email rate limit exceeded': 'Too many sign-in emails were sent recently. Wait about an hour, then request one new link.',
 };
 
 export function friendlyError(error: unknown): string {

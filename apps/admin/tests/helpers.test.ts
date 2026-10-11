@@ -60,6 +60,7 @@ describe('display helpers', () => {
   it('maps RPC errors to friendly text', () => {
     expect(friendlyError({ message: 'ticket_not_entry' })).toMatch(/add-on/);
     expect(friendlyError('new row violates row-level security policy')).toMatch(/permission/);
+    expect(friendlyError({ message: 'email rate limit exceeded' })).toMatch(/Wait about an hour/);
     expect(friendlyError(null)).toMatch(/Something went wrong/);
   });
 
