@@ -20,8 +20,12 @@ cream `#F6EFCE` backgrounds, dark teal `#1E3E41` text, orange `#E7603F` for
 accents and highlights, teal `#1F7E7B` for buttons. Headlines: Norsh (stamp),
 uppercase. Subheads and buttons: Gotham Bold, uppercase. Body: Gotham Book.
 The app icon uses the logomark (guitar player), as the guidelines recommend for
-icons; the full wordmark is unreadable at icon sizes. Font licensing for app
-embedding is still to be confirmed.
+icons; the full wordmark is unreadable at icon sizes.
+
+**Fonts: Montserrat for now** (free, SIL Open Font License). It stands in for
+Gotham (Book for body, Bold for subheads and buttons) and, in Black/ExtraBold
+uppercase, for Norsh headlines. Fonts are set in one theme file so licensed
+Gotham/Norsh files can be swapped in later without touching screens.
 
 ## 2026-10-11 · Phase 3 (web dashboard)
 
